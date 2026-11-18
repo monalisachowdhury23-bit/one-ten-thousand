@@ -27,7 +27,7 @@ Joel Lewenstein, Anthropic's head of product design, [said it plainly](https://w
 
 ## How it's built
 
-One HTML file, no framework and no build step. A single `<canvas>` draws every agent, plain HTML handles the copy and the chat panel, and the page scroll drives everything.
+Plain HTML, CSS and JavaScript, with no framework and no build step. A single `<canvas>` draws every agent, plain HTML handles the copy and the chat panel, and the page scroll drives everything.
 
 ### Every agent is made of its own words
 
@@ -77,7 +77,9 @@ Then open http://localhost:8000. You can also open `index.html` straight from th
 ## Files
 
 ```
-index.html        the whole piece: copy, styles, canvas renderer
+index.html        the copy, scenes and chat panel
+style.css         layout, type and the phone layout
+script.js         the canvas renderer, scroll logic, sphere and the find-it game
 media/            images for this README
 ```
 
