@@ -54,7 +54,7 @@ let vw,vh,dpr,cx,cy,K,mobile,cwA=7.8;
 const scenes=$$('.scene'), inners=scenes.map(s=>s.querySelector('.inner'));
 let tops=[],hs=[],P=[],RAWP=[],scene=0,last=0;
 let camN=1, camX=0, camY=0, s=300, G=0, yaw=0, pitch=.3, playZoom=3, dragging=false, dragMoved=false, lx=0, ly=0, hover=-1, openId=-1, mouse={x:-1e4,y:-1e4};
-let play=false, grid=null, found=false, playT0=0;
+let play=false, grid=null, found=false, playT0=0, agentBox=null;
 const T0=Date.now()-40*60*1000;
 
 function resize(){
@@ -90,6 +90,30 @@ function renderConvo(id,typedChars){
 function agoText(){const m=Math.floor((Date.now()-T0)/60000);return m+' min'}
 let lastTyped=-1, lastOpen=-2;
 
+
+/* card labels at scale ten. On a phone they are kept on screen, titles are
+   placed first, and any title or last line that would overlap is left out. */
+function drawCard(c,i,a,r,cardA,placed,pass){
+  const f1=mobile?11:13, f2=mobile?9:10.5, pad=12, al=cardA*a;
+  const hit=b=>placed.some(q=>!(b[2]<q[0]||b[0]>q[2]||b[3]<q[1]||b[1]>q[3]));
+  const fit=(x,w)=>Math.max(pad,Math.min(vw-pad-w,x));
+  const back=b=>{ ctx.fillStyle=`rgba(20,16,22,${.82*al})`; ctx.fillRect(b[0],b[1],b[2]-b[0],b[3]-b[1]); };
+  if(pass===0){
+    ctx.font=`500 ${f1}px ${GROT}`; const w=ctx.measureText(c.t).width;
+    const ty=c.sy-r*.7-14, tx=fit(c.sx-w/2,w), tb=[tx-4,ty-f1,tx+w+4,ty+5];
+    c.tOk=!mobile||i===0||(ty>=72&&!hit(tb));
+    if(!c.tOk) return;
+    if(mobile){ placed.push(tb); back(tb); }
+    ctx.fillStyle=`rgba(236,230,219,${al*.95})`; ctx.fillText(c.t,tx,ty); return;
+  }
+  if(!c.tOk) return;
+  const l=c.last.length>44?c.last.slice(0,43)+'…':c.last;
+  ctx.font=`${f2}px ${MONO}`; const w2=ctx.measureText(l).width;
+  const ly=c.sy+r*.7+14, lx=fit(c.sx-w2/2,w2), lb=[lx-4,ly-f2-1,lx+w2+4,ly+4];
+  if(mobile){ if(i>0&&hit(lb)) return; placed.push(lb); back(lb); }
+  ctx.fillStyle=i===0&&!(play&&!found)?`rgba(255,90,54,${al})`:`rgba(236,230,219,${al*.55})`; ctx.fillText(l,lx,ly);
+}
+
 /* ───────── per-frame ───────── */
 function frame(t){
   const dt=Math.min(.1,(t-last)/1000||.016); last=t; const kk=r=>RM?1:1-Math.exp(-dt*r);
@@ -107,7 +131,7 @@ function frame(t){
   const Ncur=Math.pow(10,logN);
   if(!play){const f=1-ss(0,1,logN); camX+=(C[0].x*f-camX)*kk(6);camY+=(C[0].y*f-camY)*kk(6)}
   /* zoom: fit the first N into the stage. Extra push-in at the very start so one conversation fills the frame. */
-  const sT=K/Math.sqrt(Math.max(1,Ncur))*(1+1.6*(1-ss(0,.35,logN)))*(1+.45*ss(.3,1,logN)*(1-ss(1.2,2,logN)));
+  const sT=K/Math.sqrt(Math.max(1,Ncur))*(1+1.6*(1-ss(0,.35,logN)))*(1+(mobile?.08:.45)*ss(.3,1,logN)*(1-ss(1.2,2,logN)));
   s+=(sT-s)*kk(7); camN+=(Ncur-camN)*kk(7);
   G=ease((P[7]-.05)/.6);
   if(G>.5&&!dragging&&!RM) yaw+=dt*.12;
@@ -187,9 +211,9 @@ function frame(t){
     /* your agent */
     ctx.fillStyle=`rgba(236,230,219,${linkA})`; ctx.beginPath(); ctx.arc(rx,ry,4.5,0,6.3); ctx.fill();
     ctx.strokeStyle=`rgba(236,230,219,${linkA*.5})`; ctx.beginPath(); ctx.arc(rx,ry,8,0,6.3); ctx.stroke();
-    const la=linkA*(1-ss(2.1,2.7,logN));
+    const la=linkA*(1-ss(2.1,2.7,logN)); agentBox=la>.02?[rx-44,ry-34,rx+44,ry-12]:null;
     if(la>.02){ ctx.font=`500 ${mobile?11:13}px ${GROT}`; ctx.fillStyle=`rgba(236,230,219,${la})`; const t1='Your agent'; ctx.fillText(t1,rx-ctx.measureText(t1).width/2,ry-20);
-      ctx.font=`${mobile?9:10.5}px ${MONO}`; ctx.fillStyle=`rgba(236,230,219,${la*.6})`; const t2='Sort out Priya’s birthday'; ctx.fillText(t2,rx-ctx.measureText(t2).width/2,ry+21); }
+      ctx.font=`${mobile?9:10.5}px ${MONO}`; ctx.fillStyle=`rgba(236,230,219,${la*.6})`; const t2='Sort out Priya’s birthday'; if(!mobile||logN<.5) ctx.fillText(t2,rx-ctx.measureText(t2).width/2,ry+21); }
   }
   ctx.font=`13px ${MONO}`; ctx.textBaseline='middle';
   const scr=RM?0:.12;
@@ -213,9 +237,9 @@ function frame(t){
   }
   /* cards at scale ten; marks at hundred; hover */
   const cardA=ss(K*.16,K*.3,s)*(1-ss(K*.75,K*1.2,s))*(1-G), markA=ss(K*.045,K*.09,s)*(1-ss(K*.16,K*.3,s))*(1-G);
+  const placed=agentBox&&mobile?[agentBox]:[];
+  if(cardA>.02) for(let pass=0;pass<2;pass++) for(let i=0;i<vis;i++){ const c=C[i]; if(c.on) drawCard(c,i,clamp(camN*1.15-i),r,cardA,placed,pass); }
   for(let i=0;i<vis;i++){ const c=C[i]; if(!c.on) continue; const a=clamp(camN*1.15-i);
-    if(cardA>.02){ ctx.font=`500 ${mobile?11:13}px ${GROT}`; ctx.fillStyle=`rgba(236,230,219,${cardA*a*.95})`; const w=ctx.measureText(c.t).width; ctx.fillText(c.t,c.sx-w/2,c.sy-r*.7-14);
-      ctx.font=`${mobile?9:10.5}px ${MONO}`; ctx.fillStyle=i===0&&hl0?`rgba(255,90,54,${cardA*a})`:`rgba(236,230,219,${cardA*a*.55})`; const l=c.last.length>44?c.last.slice(0,43)+'…':c.last; const w2=ctx.measureText(l).width; ctx.fillText(l,c.sx-w2/2,c.sy+r*.7+14); }
     if(markA>.02&&c.s==='waiting'){ ctx.font=`11px ${MONO}`; ctx.fillStyle=i===0&&hl0?`rgba(255,90,54,${markA*a})`:`rgba(236,230,219,${markA*a*.7})`; ctx.fillText('?',c.sx+r*1.25,c.sy-r*.7); }
   }
   /* scene 5: ring around the one that waits */
@@ -257,5 +281,6 @@ if(document.fonts&&document.fonts.ready) document.fonts.ready.then(resize);
 /* the one thing that plays on its own */
 const TASK='Sort out Priya’s birthday on Saturday.'; const typed=$('#typed');
 if(RM){typed.textContent=TASK}else{let i=0;setTimeout(function tick(){typed.textContent=TASK.slice(0,++i);if(i<TASK.length)setTimeout(tick,45+Math.random()*55)},600)}
+if(matchMedia('(hover: none)').matches) $('#hint').textContent='Drag to move, tap an agent to open it. Use the slider to zoom.';
 resize(); requestAnimationFrame(frame);
 })();
